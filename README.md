@@ -1,4 +1,4 @@
-# Queuay Web
+# Qay Web
 
 AI-powered QA testing SaaS platform.
 
@@ -66,7 +66,7 @@ npm run worker
 ## Project Structure
 
 ```
-queuay-web/
+qay-web/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── (auth)/             # Auth pages

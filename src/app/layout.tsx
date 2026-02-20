@@ -5,7 +5,7 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Queuay - AI-Powered QA Testing",
+  title: "Qay - AI-Powered QA Testing",
   description: "Automated QA testing powered by AI for modern web applications",
 }
 

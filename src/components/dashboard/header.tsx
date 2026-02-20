@@ -31,7 +31,7 @@ export function Header({ user }: HeaderProps) {
   return (
     <header className="h-14 border-b bg-card flex items-center justify-between px-6">
       <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold text-primary">Queuay</h1>
+        <h1 className="text-lg font-semibold text-primary">Qay</h1>
       </div>
 
       <div className="flex items-center gap-4">

@@ -79,7 +79,7 @@ export default function SignupPage() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
-            Enter your details to get started with Queuay
+            Enter your details to get started with Qay
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSignup}>

@@ -58,7 +58,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Welcome to Queuay</CardTitle>
+          <CardTitle className="text-2xl font-bold">Welcome to Qay</CardTitle>
           <CardDescription>
             Create your organization to get started
           </CardDescription>

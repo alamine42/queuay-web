@@ -20,7 +20,7 @@ function getConnectionOptions(): ConnectionOptions {
 
 const connection = getConnectionOptions()
 
-console.log(`Starting Queuay Worker...`)
+console.log(`Starting Qay Worker...`)
 console.log(`Redis URL: ${redisUrl}`)
 console.log(`Concurrency: ${concurrency}`)
 
