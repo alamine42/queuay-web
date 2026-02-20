@@ -1,0 +1,341 @@
+import { chromium, Browser, Page } from "playwright"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import type { Story, StoryStep, HealProposal, StepResult } from "../src/lib/types"
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+interface ExecutionOptions {
+  retryCount: number
+  screenshotOnFailure: boolean
+}
+
+interface ExecutionResult {
+  passed: boolean
+  duration_ms: number
+  steps: StepResult[]
+  error?: string
+  screenshot_url?: string
+  console_errors: string[]
+  heal_proposal?: HealProposal
+  retries: number
+}
+
+let browser: Browser | null = null
+
+async function getBrowser(): Promise<Browser> {
+  if (!browser) {
+    browser = await chromium.launch({
+      headless: true,
+    })
+  }
+  return browser
+}
+
+async function uploadScreenshot(
+  screenshot: Buffer,
+  storyId: string,
+  timestamp: string
+): Promise<string | null> {
+  try {
+    const supabase = createSupabaseClient(supabaseUrl, supabaseServiceKey)
+    const filename = `${storyId}/${timestamp}.png`
+
+    const { error } = await supabase.storage
+      .from("screenshots")
+      .upload(filename, screenshot, {
+        contentType: "image/png",
+        upsert: true,
+      })
+
+    if (error) {
+      console.error("Screenshot upload error:", error)
+      return null
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("screenshots").getPublicUrl(filename)
+
+    return publicUrl
+  } catch (error) {
+    console.error("Screenshot upload failed:", error)
+    return null
+  }
+}
+
+async function executeStep(
+  page: Page,
+  step: StoryStep,
+  stepIndex: number
+): Promise<StepResult> {
+  const startTime = Date.now()
+
+  try {
+    const action = step.action.toLowerCase()
+
+    // Navigate
+    if (action.includes("navigate") || action.includes("go to")) {
+      const url = step.value || step.element
+      if (url) {
+        await page.goto(url, { waitUntil: "networkidle" })
+      }
+    }
+    // Click
+    else if (action.includes("click") || action.includes("tap")) {
+      const selector = step.selector || step.element
+      if (selector) {
+        await page.click(selector)
+      }
+    }
+    // Type/Fill
+    else if (
+      action.includes("type") ||
+      action.includes("enter") ||
+      action.includes("fill")
+    ) {
+      const selector = step.selector || step.element
+      const value = step.value || ""
+      if (selector) {
+        await page.fill(selector, value)
+      }
+    }
+    // Select
+    else if (action.includes("select") || action.includes("choose")) {
+      const selector = step.selector || step.element
+      const value = step.value || ""
+      if (selector) {
+        await page.selectOption(selector, value)
+      }
+    }
+    // Check/Uncheck
+    else if (action.includes("check")) {
+      const selector = step.selector || step.element
+      if (selector) {
+        await page.check(selector)
+      }
+    } else if (action.includes("uncheck")) {
+      const selector = step.selector || step.element
+      if (selector) {
+        await page.uncheck(selector)
+      }
+    }
+    // Wait
+    else if (action.includes("wait")) {
+      const timeout = parseInt(step.value || "1000", 10)
+      await page.waitForTimeout(timeout)
+    }
+    // Scroll
+    else if (action.includes("scroll")) {
+      const selector = step.selector || step.element
+      if (selector) {
+        await page.locator(selector).scrollIntoViewIfNeeded()
+      } else {
+        await page.evaluate(() => window.scrollBy(0, 300))
+      }
+    }
+    // Hover
+    else if (action.includes("hover")) {
+      const selector = step.selector || step.element
+      if (selector) {
+        await page.hover(selector)
+      }
+    }
+    // Press key
+    else if (action.includes("press")) {
+      const key = step.value || "Enter"
+      await page.keyboard.press(key)
+    }
+    // Focus
+    else if (action.includes("focus")) {
+      const selector = step.selector || step.element
+      if (selector) {
+        await page.focus(selector)
+      }
+    }
+    // Default: try to click if element provided
+    else if (step.selector || step.element) {
+      const selector = step.selector || step.element!
+      await page.click(selector)
+    }
+
+    // Wait for any navigation or network activity to settle
+    await page.waitForLoadState("networkidle").catch(() => {})
+
+    return {
+      step: stepIndex,
+      action: step.action,
+      passed: true,
+      duration_ms: Date.now() - startTime,
+    }
+  } catch (error) {
+    return {
+      step: stepIndex,
+      action: step.action,
+      passed: false,
+      duration_ms: Date.now() - startTime,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+export async function executeStory(
+  story: Story,
+  baseUrl: string,
+  options: ExecutionOptions
+): Promise<ExecutionResult> {
+  const browser = await getBrowser()
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+  })
+  const page = await context.newPage()
+
+  const consoleErrors: string[] = []
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      consoleErrors.push(msg.text())
+    }
+  })
+
+  const startTime = Date.now()
+  const stepResults: StepResult[] = []
+  let passed = true
+  let error: string | undefined
+  let screenshotUrl: string | undefined
+  let retries = 0
+
+  try {
+    // Navigate to base URL first
+    await page.goto(baseUrl, { waitUntil: "networkidle" })
+
+    // Execute each step
+    for (let i = 0; i < story.steps.length; i++) {
+      const step = story.steps[i]
+      let stepResult: StepResult
+
+      // Retry logic for individual steps
+      let attempts = 0
+      let lastError: string | undefined
+
+      while (attempts <= options.retryCount) {
+        stepResult = await executeStep(page, step, i)
+
+        if (stepResult.passed) {
+          break
+        }
+
+        lastError = stepResult.error
+        attempts++
+        retries++
+
+        if (attempts <= options.retryCount) {
+          // Wait before retry
+          await page.waitForTimeout(1000)
+        }
+      }
+
+      stepResults.push(stepResult!)
+
+      if (!stepResult!.passed) {
+        passed = false
+        error = lastError
+
+        // Take screenshot on failure
+        if (options.screenshotOnFailure) {
+          const screenshot = await page.screenshot()
+          screenshotUrl = await uploadScreenshot(
+            screenshot,
+            story.id,
+            new Date().toISOString().replace(/[:.]/g, "-")
+          ) || undefined
+        }
+
+        break
+      }
+    }
+
+    // Verify outcome if all steps passed
+    if (passed && story.outcome?.verifications) {
+      for (const verification of story.outcome.verifications) {
+        try {
+          if (verification.type === "url") {
+            const currentUrl = page.url()
+            if (!currentUrl.includes(verification.expected)) {
+              passed = false
+              error = `Expected URL to contain "${verification.expected}", got "${currentUrl}"`
+            }
+          } else if (verification.type === "element") {
+            const element = await page
+              .locator(verification.target || verification.expected)
+              .first()
+            if (!(await element.isVisible())) {
+              passed = false
+              error = `Element "${verification.target || verification.expected}" not visible`
+            }
+          } else if (verification.type === "content") {
+            const hasText = await page
+              .locator(`text=${verification.expected}`)
+              .first()
+              .isVisible()
+              .catch(() => false)
+            if (!hasText) {
+              passed = false
+              error = `Expected content "${verification.expected}" not found`
+            }
+          }
+        } catch (e) {
+          passed = false
+          error = e instanceof Error ? e.message : String(e)
+        }
+
+        if (!passed) break
+      }
+
+      // Take screenshot on verification failure
+      if (!passed && options.screenshotOnFailure && !screenshotUrl) {
+        const screenshot = await page.screenshot()
+        screenshotUrl = await uploadScreenshot(
+          screenshot,
+          story.id,
+          new Date().toISOString().replace(/[:.]/g, "-")
+        ) || undefined
+      }
+    }
+  } catch (e) {
+    passed = false
+    error = e instanceof Error ? e.message : String(e)
+
+    // Take screenshot on error
+    if (options.screenshotOnFailure) {
+      try {
+        const screenshot = await page.screenshot()
+        screenshotUrl = await uploadScreenshot(
+          screenshot,
+          story.id,
+          new Date().toISOString().replace(/[:.]/g, "-")
+        ) || undefined
+      } catch {
+        // Ignore screenshot errors
+      }
+    }
+  } finally {
+    await context.close()
+  }
+
+  return {
+    passed,
+    duration_ms: Date.now() - startTime,
+    steps: stepResults,
+    error,
+    screenshot_url: screenshotUrl,
+    console_errors: consoleErrors,
+    retries,
+  }
+}
+
+// Clean up browser on process exit
+process.on("exit", async () => {
+  if (browser) {
+    await browser.close()
+  }
+})
