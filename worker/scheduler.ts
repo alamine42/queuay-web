@@ -1,8 +1,37 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { enqueueTestRun } from "../src/lib/queue/client"
+import { Queue } from "bullmq"
+import type { ConnectionOptions } from "bullmq"
+import type { TestRunJobData } from "./types"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const redisUrl = process.env.REDIS_URL || "redis://localhost:6379"
+
+function getConnectionOptions(): ConnectionOptions {
+  const url = new URL(redisUrl)
+  return {
+    host: url.hostname,
+    port: parseInt(url.port || "6379", 10),
+    password: url.password || undefined,
+    maxRetriesPerRequest: null,
+  }
+}
+
+let queue: Queue | null = null
+
+function getQueue(): Queue {
+  if (!queue) {
+    queue = new Queue("test-runs", {
+      connection: getConnectionOptions(),
+    })
+  }
+  return queue
+}
+
+async function enqueueTestRun(data: TestRunJobData) {
+  const q = getQueue()
+  return q.add("execute", data, { priority: 1 })
+}
 
 export async function checkScheduledJobs(): Promise<void> {
   const supabase = createSupabaseClient(supabaseUrl, supabaseServiceKey)
