@@ -2,7 +2,7 @@ import { Worker, Job } from "bullmq"
 import type { ConnectionOptions } from "bullmq"
 import { executeTestRun } from "./test-executor"
 import { checkScheduledJobs } from "./scheduler"
-import type { TestRunJobData } from "../src/lib/queue/client"
+import type { TestRunJobData } from "./types"
 
 const redisUrl = process.env.REDIS_URL || "redis://localhost:6379"
 const concurrency = parseInt(process.env.WORKER_CONCURRENCY || "3", 10)

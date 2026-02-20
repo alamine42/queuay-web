@@ -1,6 +1,12 @@
 import { chromium, Browser, Page } from "playwright"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import type { Story, StoryStep, HealProposal, StepResult } from "../src/lib/types"
+import type { StoryStep, HealProposal, StepResult } from "./types"
+
+interface Story {
+  id: string
+  steps: StoryStep[]
+  outcome: { verifications: Array<{ type: string; target?: string; expected: string }> }
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
