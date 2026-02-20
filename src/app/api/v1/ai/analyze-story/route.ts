@@ -22,8 +22,9 @@ export async function POST(request: Request) {
     return NextResponse.json(result)
   } catch (error) {
     console.error("Story analysis error:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { error: "Failed to analyze story" },
+      { error: "Failed to analyze story", details: errorMessage },
       { status: 500 }
     )
   }
