@@ -1,0 +1,8 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="128" fill="#6366F1"/>
+
+  <!-- Q letter - geometric circle with tail -->
+  <circle cx="256" cy="224" r="128" stroke="white" stroke-width="56" fill="none"/>
+  <line x1="304" y1="304" x2="416" y2="448" stroke="white" stroke-width="56" stroke-linecap="round"/>
+</svg>
