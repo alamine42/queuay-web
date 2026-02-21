@@ -40,7 +40,12 @@ export async function createTestUser(data: TestUserInput) {
   }
 
   // Encrypt password
-  const passwordEncrypted = await encrypt(password)
+  let passwordEncrypted: string
+  try {
+    passwordEncrypted = await encrypt(password)
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to encrypt password" }
+  }
 
   const { data: testUser, error } = await supabase
     .from("test_users")
@@ -112,7 +117,11 @@ export async function updateTestUser(data: {
 
   // Encrypt new password if provided
   if (password) {
-    updates.password_encrypted = await encrypt(password)
+    try {
+      updates.password_encrypted = await encrypt(password)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Failed to encrypt password" }
+    }
   }
 
   const { error } = await supabase
